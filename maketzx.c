@@ -27,6 +27,7 @@
 #include <fcntl.h>
 #include <string.h>
 #include <math.h>
+#include <unistd.h>
 
 int ARGC;
 char **ARGV;
@@ -96,7 +97,7 @@ typedef unsigned long dword;
 
 typedef struct {
 		 byte handle;
-		 byte name[255];
+		 char name[255];
 		 word bufpoint;
 		 dword length;
 		 dword xferred;
@@ -177,7 +178,7 @@ dword saveblocklen;
 float samprate=0;
 
 wdata pilot;
-wdata sync;
+wdata syncx;
 wdata bit0;
 wdata bit1;
 
@@ -264,7 +265,7 @@ byte tzxhead[10]="ZXTape!\x1a\x01\x0a",
      puretone[5]={ 0x12,0,0,0,0 },
      pulses[2]={ 0x13,0 },
      puredata[0xb]={ 0x14,0,0,0,0,0,0,0,0,0,0 },
-     pause[3]={ 0x20,0,0 },
+     pausex[3]={ 0x20,0,0 },
      groupstart[2]={ 0x21,0 },
      groupend[1]={ 0x22 },
      loopstart[3]={ 0x24,0,0 },
@@ -526,13 +527,13 @@ void CheckSyntax(void)
   if (!files) Instructions();
   if (files==1)
      {
-       if (bslashpos!=NULL) fnamelen=strlen(inpfile.name)-((int)bslashpos-(int)inpfile.name)-1;
+       if (bslashpos!=NULL) fnamelen=strlen(inpfile.name)-(bslashpos-inpfile.name)-1;
        else fnamelen=strlen(inpfile.name);
        strcpy(outfile.name,strncpy(outfile.name,strrev(inpfile.name),fnamelen));
        strrev(inpfile.name); strrev(outfile.name);
        if (fstoppos!=NULL)
 	  {
-	    outfile.name[(int)strrchr(outfile.name,'.')-(int)outfile.name]='\0';
+	    outfile.name[(int)(strrchr(outfile.name,'.')-outfile.name)]='\0';
 	  }
        else // strcat(strupr(inpfile.name),".VOC");
             strcat(inpfile.name,".voc");
@@ -697,8 +698,7 @@ void CheckVOCHeader(void)
      } */
   printf("done\n");
   printf("Total file length: %lu bytes (%lu samples)\n\n",filepos,totalsamp);
-  if (blocktype && eof(inpfile.handle)) printf("***WARNING*** - Unexpected end
-  of file!\n\n");
+  if (blocktype && eof(inpfile.handle)) printf("***WARNING*** - Unexpected end of file!\n\n");
   lseek(inpfile.handle,26,SEEK_SET);
   filepos=26;
   blocklength=processed=inpfile.bufpoint=0;
@@ -814,7 +814,7 @@ void ProcessExtended(void)
 void SetTimings(void)
 {
   TuneRates(&pilot);
-  TuneRates(&sync);
+  TuneRates(&syncx);
   TuneRates(&bit0);
   TuneRates(&bit1);
 }
@@ -927,14 +927,16 @@ dword FindEdge2(void)
      {
        hp1=FindEdge1();
        if (!blocktype)
-       if (!FindingPause && hp1>(int)(samprate/500))
-	  {
-	    mspause=(hp1/samprate)*1000;
-	    hp2=hp1=0;
-	    EndBlock=1;
-	    return hp2;
-	  }
-       else return hp1;
+          {
+            if (!FindingPause && hp1>(int)(samprate/500))
+	       {
+	         mspause=(hp1/samprate)*1000;
+	         hp2=hp1=0;
+	         EndBlock=1;
+	         return hp2;
+	       }
+            else return hp1;
+          }
        hp2=FindEdge1();
        if (!FindingPause && hp2>(int)(samprate/500))
 	  {
@@ -948,14 +950,16 @@ dword FindEdge2(void)
 	      hp1+=FindEdge1();
 	      //
 	      if (!blocktype)
-	      if (!FindingPause && hp1>(int)(samprate/500))
-		 {
-		   mspause=(hp1/samprate)*1000;
-		   hp2=hp1=0;
-		   EndBlock=1;
-		   return hp2;
-		 }
-	      else return hp1;
+	         {
+	           if (!FindingPause && hp1>(int)(samprate/500))
+		      {
+		        mspause=(hp1/samprate)*1000;
+		        hp2=hp1=0;
+		        EndBlock=1;
+		        return hp2;
+		      }
+	           else return hp1;
+	         }
 	      //
 	      if (currpulse<2 && bit0.samples>3)
 		 {
@@ -1025,7 +1029,7 @@ dword ClickingPilotSearch(void)
 	    if (tzxhead[9]<0x0a)
 	       {
 		 WriteTZXTone(pilot.tstates,hpulses);
-		 pulseseq[0]=pulseseq[1]=sync.tstates;
+		 pulseseq[0]=pulseseq[1]=syncx.tstates;
 		 WriteTZXPulseSequence(2);
 	       }
 	  }
@@ -1046,14 +1050,14 @@ dword ClickingPilotSearch(void)
 		   for (count=tpointer-(tpointer+1)/8; count<tpointer; count++)
 		       {
 			 WriteTZXTone(pilot.tstates,pulsenum[count]);
-			 pulseseq[0]=pulseseq[1]=sync.tstates;
+			 pulseseq[0]=pulseseq[1]=syncx.tstates;
 			 WriteTZXPulseSequence(2);
 		       }
 		   WriteTZXLoopEnd();
 		   for (count=tpointer-(tpointer+1)/8; count<tpointer-1; count++)
 		       {
 			 WriteTZXTone(pilot.tstates,pulsenum[count]);
-			 pulseseq[0]=pulseseq[1]=sync.tstates;
+			 pulseseq[0]=pulseseq[1]=syncx.tstates;
 			 WriteTZXPulseSequence(2);
 		       }
 
@@ -1097,10 +1101,10 @@ dword PilotSearch(word pulses)
 	  lseek(inpfile.handle,filepos,SEEK_SET);
 	  inpfile.bufpoint=0;
 	  ecf=(double)808/pfreq;
-	  if (abs(ecf)<.10) ecf=1;
+	  if (fabs(ecf)<.10) ecf=1;
 	  CheckingSpeed=0;
 	}
-     while (abs(ecf-1)>.20);
+     while (fabs(ecf-1)>.20);
   if (!FindingPause && !ClickSearch) printf("Searching pilot...     \x0d");
   if (spdchk) pilot.samples*=ecf;
   do {
@@ -1155,8 +1159,8 @@ dword SyncSearch(void)
        pulseget=0;
   word hwaves=0;
   long pulse;
-  float tolerance=(middle-sync.samples)*.75;
-  if (spdchk) sync.samples*=ecf;
+  float tolerance=(middle-syncx.samples)*.75;
+  if (spdchk) syncx.samples*=ecf;
   SyncLoadOK=0;
      {
        do {
@@ -1165,20 +1169,20 @@ dword SyncSearch(void)
 		 else { pulse-=lastpulse; pulseget=0; }
 		 if (!pulse || pulse<(minsmp-tolerance)/2 || pulse>maxsmp/2)
 		    { mspause+=(pulse/samprate)*1000; return hwaves; }
-		 if (abs(pulse-lastpulse)>diff*5 && abs(pulse-lastpulse) && abs(diff)>tolerance) pulse+=(diff*(abs(diff)<5));
+		 if ((pulse-lastpulse)>diff*5 && (pulse-lastpulse) && abs(diff)>tolerance) pulse+=(diff*(abs(diff)<5));
 		 if (pulse<0)
 		 pulse-=diff;
 		 hwaves++;
 		 pilotlength+=pulse;
 	       }
 	    while (pulse>(byte)((double)(middle+tolerance)/2+.5) || (pulse/2+lastpulse/2<middle/2 && diff>minsmp/2));
-	    if (abs(pulse-lastpulse)>middle/2 && abs(lastpulse-middle)>tolerance && pulse)
+	    if ((pulse-lastpulse)>middle/2 && (lastpulse-middle)>tolerance && pulse)
 	       {
 		 double sum=pulse+lastpulse;
 //               if (!pulse) sum-=diff;
 		 pulse=sum*.3; lastpulse=sum-pulse;
 	       }
-	    if (pulse+lastpulse>middle || (abs(lastpulse-(byte)pilot.samples/2)<=tolerance && pulse>=sync.samples/2) || sync.samples<2)// || abs(lastpulse-(byte)sync.samples)>1) //lastpulse>sync.samples)
+	    if (pulse+lastpulse>middle || ((lastpulse-(byte)pilot.samples/2)<=tolerance && pulse>=syncx.samples/2) || syncx.samples<2)// || abs(lastpulse-(byte)syncx.samples)>1) //lastpulse>syncx.samples)
 	       {
 		 pilotlength-=pulse;
 		 if (!pulseget) { pulse+=FindEdge1(); pulseget=1; }
@@ -1247,7 +1251,7 @@ dword DataRead(double bit0,double bit1,word explen)
 		     while (pulse<bit0-tolerance && blocktype);
 
 
-		  if ((abs(pulse-(int)(middle+.5))<2 && abs(pulse-2*currpulse)>2) || pulse>maxpulse)
+		  if (((pulse-(int)(middle+.5))<2 && (pulse-2*currpulse)>2) || pulse>maxpulse)
 		     {
 		       if (currpulse+lastpulse>maxpulse)
 			  {
@@ -1490,7 +1494,7 @@ word ReadNormalBlock(void)
 {
   word loaded=0;
   pilot.freq=808;
-  sync.freq=2450;
+  syncx.freq=2450;
   bit0.freq=2044;
   bit1.freq=1022;
   SetTimings();
@@ -1596,7 +1600,7 @@ word ReadBleeploadBlock(void)
 {
   word loaded=0;
   pilot.freq=808;
-  sync.freq=2450;
+  syncx.freq=2450;
   bit0.freq=2044;
   bit1.freq=1022;
   SetTimings();
@@ -1667,7 +1671,7 @@ word ReadSoftlockFirstBlock(void)
 {
   dword loaded;
   pilot.freq=808;
-  sync.freq=2450;
+  syncx.freq=2450;
   bit0.freq=2600;
   bit1.freq=1300;
   SetTimings();
@@ -1713,7 +1717,7 @@ dword ReadAlkatrazBlock(void)
 {
   dword loaded;
   pilot.freq=808;
-  sync.freq=2450;
+  syncx.freq=2450;
   bit0.freq=3100;
   bit1.freq=1550;
   SetTimings();
@@ -1795,12 +1799,12 @@ void CompositeSyncSearch(void)
   dword pulse;
   for (count=0; count<7; count++)
       {
-	sync.freq=compositesync[count];
+	syncx.freq=compositesync[count];
 	SetTimings();
-	tolerance=sync.samples/3;
+	tolerance=syncx.samples/3;
 	pulse=FindEdge2();
 	if (!blocktype) return;
-	if (pulse<(int)sync.samples-tolerance || pulse>(int)sync.samples+tolerance)
+	if (pulse<(int)syncx.samples-tolerance || pulse>(int)syncx.samples+tolerance)
 	   { strcpy(errstring,"Bad sync detection or corrupted composite-sync"); Error(8); }
       }
 }
@@ -1894,7 +1898,7 @@ byte MidSyncSearch(void)
 
 
 	pulse=FindEdge2();
-	if ((abs(pulse-(int)(middle+.5))<2 /* && abs(pulse-2*currpulse)>2 */) || pulse>maxpulse) pulse=((currpulse+lastpulse)/2+pulse-middle+(lastpulse<currpulse))*2;
+	if (((pulse-(int)(middle+.5))<2 /* && abs(pulse-2*currpulse)>2 */) || pulse>maxpulse) pulse=((currpulse+lastpulse)/2+pulse-middle+(lastpulse<currpulse))*2;
 	if ((pulse<middle) && (pulse>=bit0.samples-tolerance)) value<<=1;
 	else if ((pulse<=bit1.samples+tolerance) && (pulse>=middle)) { value<<=1; value|=0x1; }
       }
@@ -1930,7 +1934,7 @@ word BeepSearch(word minlen)
 	    if (!tonesearch && tolerance>4) tolerance=4;
 //new code ends
 	  }
-       while (abs(pulse-lastpulse)>tolerance || pulse<minlim || pulse>maxlim);
+       while ((pulse-lastpulse)>tolerance || pulse<minlim || pulse>maxlim);
        wavelen=(beeplength=pulse)*2; pulsecount=1;
 //new code begins
        if (tonesearch)
@@ -1939,7 +1943,7 @@ word BeepSearch(word minlen)
        for (count=0; count<minlen; count++)
 	   {
 	     pulse=FindEdge2();
-	     if (abs(pulse-wavelen)>tolerance)
+	     if (fabs(pulse-wavelen)>tolerance)
 	     { noise=1; break; }
 	     else { beeplength+=pulse; pulsecount+=2; }
 	   }
@@ -1951,7 +1955,7 @@ word BeepSearch(word minlen)
 	  if (!blocktype) return 0;
 	  beeplength+=pulse; pulsecount++;
 	}
-     while (abs(pulse-wavelen/2)<=tolerance || (abs(pulse-5)<3 && tonesearch));
+     while (fabs(pulse-wavelen/2)<=tolerance || ((pulse-5)<3 && tonesearch));
   beeplength-=pulse;
   wavelen=(float)2*beeplength/pulsecount;
   beepfreq=(samprate/wavelen);
@@ -2135,7 +2139,7 @@ word WaveSearch(void)
        if (!blocktype) return read;
        length=(((read+=pulse)/samprate)*1000);
      }
-  while (abs(last-pulse)<maxsmp/4 || length<20);
+  while ((last-pulse)<maxsmp/4 || length<20);
   return length;
 }
 
@@ -2425,7 +2429,7 @@ void RawRead(void)
    pilot.freq=BeepSearch(48);
    if (!pilot.freq) return;
    tonesearch=0;
-   sync.freq=2450;
+   syncx.freq=2450;
    SetTimings();
    PopFilePointers();
    lseek(inpfile.handle,filepos,SEEK_SET);
@@ -2437,7 +2441,7 @@ void RawRead(void)
 	if (!blocktype) return;
       }
    while (!SyncLoadOK);
-   if (!SyncLoadOK && lastpulse) sync.freq=samprate/(2*lastpulse); SetTimings();
+   if (!SyncLoadOK && lastpulse) syncx.freq=samprate/(2*lastpulse); SetTimings();
    PushFilePointers();
    printf("Analysing pulses...            \xd");
    SearchDataFrequencies();
@@ -2448,24 +2452,24 @@ void RawRead(void)
    mspause=0;
    bytes=DataRead(bit0.samples,bit1.samples,0);
    if (blocktype) mspause+=(FindPause()/samprate)*1000;
-   if (abs(pilot.freq-810)<60)
+   if (fabs(pilot.freq-810)<60)
       {
 	double ratio=(808/pilot.freq);
 	pilot.freq=808; pilotlength/=ratio; mspause/=ratio;
 	bit0.freq*=ratio; bit1.freq*=ratio;
       }
-   if (abs(bit1.freq-1022)<=60)
+   if (fabs(bit1.freq-1022)<=60)
       {
 	bit0.freq=2*(bit1.freq=1022);
 	raw=0;
       }
    else {
 	  header.type=0x0e;
-	  if (abs(bit1.freq-1225)<=70) { bit0.freq=2*(bit1.freq=1225); }
-	  else if (soft || abs(bit1.freq-1300)<=50) { bit0.freq=2*(bit1.freq=1300); }
+	  if (fabs(bit1.freq-1225)<=70) { bit0.freq=2*(bit1.freq=1225); }
+	  else if (soft || fabs(bit1.freq-1300)<=50) { bit0.freq=2*(bit1.freq=1300); }
 	     //else if (abs(bit1.freq-1400)<50) { bit0.freq=2*(bit1.freq=1400); SetTimings(); }
-	       else if (slocktype || (!alk && abs(bit1.freq-1480)<55)) { bit0.freq=2*(bit1.freq=1500); }
-		    else if (alk || (!slocktype && abs(bit1.freq-1550)<15)) { bit0.freq=2*(bit1.freq=1550); }
+	       else if (slocktype || (!alk && fabs(bit1.freq-1480)<55)) { bit0.freq=2*(bit1.freq=1500); }
+		    else if (alk || (!slocktype && fabs(bit1.freq-1550)<15)) { bit0.freq=2*(bit1.freq=1550); }
 	}
    SetTimings();
    if (bytes==19)
@@ -2498,7 +2502,7 @@ void RawRead(void)
 	}
 
    PrintBlockInfo(header.start,bytes);
-   if (pilot.freq==808 && sync.freq==2450 && bit0.freq==2044 && bit1.freq==1022) WriteTZXNormalBlock(bytes);
+   if (pilot.freq==808 && syncx.freq==2450 && bit0.freq==2044 && bit1.freq==1022) WriteTZXNormalBlock(bytes);
    else WriteTZXTurboBlock(pilotlength,8,bytes);
    raw=0;
 }
@@ -2551,8 +2555,8 @@ void SearchDataFrequencies(void)
 	     pulsecount++;
 	     if (pulse)
 		{
-		  if (abs(pulse-pmax)<2) { wmaxcount++; totmax+=pulse; }
-		  else if (abs(pulse-pmin)<2) { wmincount++; totmin+=pulse; }
+		  if (fabs(pulse-pmax)<2) { wmaxcount++; totmax+=pulse; }
+		  else if (fabs(pulse-pmin)<2) { wmincount++; totmin+=pulse; }
 		  //if (pulse==pmax || (pulse>pmax && pulse<=pmax*1.5 && abs(pmin*2-pulse)<2)) { wmaxcount++; totmax+=pulse; }// && pulse<=pmax*1.5) wmaxcount++;
 		  //else if (pulse>pmax && pulse<=pmax*1.5) wmaxcount=1;
 		       //else if (pulse==pmin || (pulse<pmin && pulse>=pmin*.5 && abs(pmax/2-pulse)<2)) { wmincount++; totmin+=pulse; }//&& pulse>=pmin*.5) wmincount++;
@@ -2575,10 +2579,10 @@ void SearchDataFrequencies(void)
 /*  if (pmax-start*2>pmin/2) { totmax+=start; totmin-=start; wmincount--; }
   else { totmax-=start; wmaxcount--; } */
   min=totmin/wmincount; max=totmax/wmaxcount;
-  if (abs(pmin*2-pmax)>pmin/2) { pmin=min; pmax=max; }
+  if (fabs(pmin*2-pmax)>pmin/2) { pmin=min; pmax=max; }
   else {
-	 if ((wmincount==1 && wmaxcount>1) || abs(pmin-startmin)<.01) pmin=max/2;
-	    else if ((wmaxcount==1 && wmincount>1) || abs(pmax-startmax)<0.1) pmax=min*2;
+	 if ((wmincount==1 && wmaxcount>1) || fabs(pmin-startmin)<.01) pmin=max/2;
+	    else if ((wmaxcount==1 && wmincount>1) || fabs(pmax-startmax)<0.1) pmax=min*2;
 	 pmin=(pmin+pmax)/3; pmax=2*pmin;
        }
 //  pmax+=(pmax*(2*ratio/3)/100);
@@ -2610,14 +2614,14 @@ void PrintBlockInfo(word loadadd,dword biglen)
 				   printf("Length=%5u",len);
 				   if (slocktype>4 || zeta) printf(", RAM page=%u",rampage);
 				   printf("\n"); break;
-		       case    9 : printf(" -->Sub-block %.3u   - Start=%5u, Length=%3u, Pause=%ums.\n",subblocks,nxtloadpos,len,lpause); break;
+		       case    9 : printf(" -->Sub-block %.3u   - Start=%5u, Length=%3u, Pause=%lums.\n",subblocks,nxtloadpos,len,lpause); break;
 		       case 0x0a : printf("Decryption beeps    - Total=%3u, ",beeps);
 				   printf("Pause=%lums.\n",lpause); break;
 		       case 0x0b : printf("Decryption waves    - Total=%3u, Pause=%lums.\n",len,lpause); break;
 		       case 0x0c : printf("Decryption tone     - Length=%ums., Pause=%lums.\n",len,lpause); break;
 		       case 0x0e :
 		       case 0x0f : if (!raw) printf("------------------- - ");
-				   else printf("F: %2X - Speed: %3u% - ",flag,(dword)bit1.freq*100/1022);
+				   else printf("F: %2X - Speed: %3lu%% - ",flag,(dword)bit1.freq*100/1022);
 				   if (type==0x0f && header.start) printf("Start=%5u, ",loadadd);
 				   else {
 					  printf("Chk=");
@@ -2646,7 +2650,7 @@ void PrintBlockInfo(word loadadd,dword biglen)
 		       case 0x62 :
 		       case 0x72 : printf("Speedlock %u Block 2 - Multiple sub-blocks sequence starting\n",(type&0xf0)/0x10); break;
 		       case 0x81 : printf("Alkatraz Block 1    - Start=%5u, Length=%5u, Pause=%lums.\n",alkloadpos,len,lpause); break;
-		       case 0x82 : printf("Alkatraz Block 2    - Length=%5lu, Pause=%ums.\n",biglen,lpause); break;
+		       case 0x82 : printf("Alkatraz Block 2    - Length=%5lu, Pause=%lums.\n",biglen,lpause); break;
 		       case 0x91 :
 		       case 0x92 :
 		       case 0x93 : printf("Bleepload Group %2u  - Multiple sub-blocks sequence starting\n",type-0x90); break;
@@ -2654,7 +2658,7 @@ void PrintBlockInfo(word loadadd,dword biglen)
 		       case 0xa1 : printf("Softlock Block      - Multiple sub-blocks sequence starting\n"); break;
 		       case 0xb1 : printf("ZetaLoad Block 1    - Start=%5u, Length=%5u, Pause=%lums.\n",loadadd,len,lpause); break;
 		       case 0xb2 : printf("ZetaLoad Block 2    - Multiple sub-blocks sequence starting\n"); break;
-		       case 0xff : printf("Block End           - Total Length=%lu, Pause=%ums.\n",biglen,lpause); break;
+		       case 0xff : printf("Block End           - Total Length=%lu, Pause=%lums.\n",biglen,lpause); break;
 		   }
 	      if (type<4) printf("%s - Header: Length=%2u, Pause=%lums.\n",header.name,17,lpause);
 	    }
@@ -2670,14 +2674,14 @@ void PrintBlockInfo(word loadadd,dword biglen)
 			      printf("Length=%.4X",len);
 			      if (slocktype>4 || zeta) printf(", RAM page=%X",rampage);
 			      printf("\n"); break;
-		  case    9 : printf(" -->Sub-block %.3u   - Start=%.4X, Length=%.3X, Pause=%ums.\n",subblocks,nxtloadpos,len,lpause); break;
+		  case    9 : printf(" -->Sub-block %.3u   - Start=%.4X, Length=%.3X, Pause=%lums.\n",subblocks,nxtloadpos,len,lpause); break;
 		  case 0x0a : printf("Decryption beeps    - Total=%2X, ",beeps);
 			      printf("Pause=%lums.\n",lpause); break;
 		  case 0x0b : printf("Decryption waves    - Total=%2X, Pause=%lums.\n",len,lpause); break;
 		  case 0x0c : printf("Decryption tone     - Length=%ums., Pause=%lums.\n",len,lpause); break;
 		  case 0x0e :
 		  case 0x0f : if (!raw) printf("------------------- - ");
-			      else printf("F: %2X - Speed: %3u% - ",flag,(dword)bit1.freq*100/1022);
+			      else printf("F: %2X - Speed: %3lu%% - ",flag,(dword)bit1.freq*100/1022);
 			      if (type==0x0f && header.start) printf("Start=%.4X, ",loadadd);
 			      else {
 				     printf("Chk=");
@@ -2714,7 +2718,7 @@ void PrintBlockInfo(word loadadd,dword biglen)
 		  case 0xa1 : printf("Softlock Block      - Multiple sub-blocks sequence starting\n"); break;
 		  case 0xb1 : printf("ZetaLoad Block 1    - Start=%.4X, Length=%.4X, Pause=%lums.\n",loadadd,len,lpause); break;
 		  case 0xb2 : printf("ZetaLoad Block 2    - Multiple sub-blocks sequence starting\n"); break;
-		  case 0xff : printf("Block End           - Total Length=%lX, Pause=%ums.\n",biglen,lpause); break;
+		  case 0xff : printf("Block End           - Total Length=%lX, Pause=%lums.\n",biglen,lpause); break;
 		}
 	 if (type<4) printf("%s - Header: Length=%.2X, Pause=%lums.\n",header.name,17,lpause);
        }
@@ -2748,8 +2752,8 @@ void WriteTZXTurboBlock(dword lpilot,byte lastbyte,dword datalen)
   word pilotpulses=2*lpilot/pilot.samples;
   PushFilePointers();
   turboblock[1]=Lo(pilot.tstates); turboblock[2]=Hi(pilot.tstates);
-  turboblock[3]=Lo(sync.tstates); turboblock[4]=Hi(sync.tstates);
-  turboblock[5]=Lo(sync.tstates); turboblock[6]=Hi(sync.tstates);
+  turboblock[3]=Lo(syncx.tstates); turboblock[4]=Hi(syncx.tstates);
+  turboblock[5]=Lo(syncx.tstates); turboblock[6]=Hi(syncx.tstates);
   turboblock[7]=Lo(bit0.tstates); turboblock[8]=Hi(bit0.tstates);
   turboblock[9]=Lo(bit1.tstates); turboblock[10]=Hi(bit1.tstates);
   turboblock[11]=Lo(pilotpulses); turboblock[12]=Hi(pilotpulses);
@@ -2813,8 +2817,8 @@ void WriteTZXPureData(byte lastbyte,dword datalen)
 void WriteTZXPause(word pauselen)
 {
   byte count;
-  pause[1]=Lo(pauselen); pause[2]=Hi(pauselen);
-  for (count=0; count<sizeof(pause); count++) PutData(&outfile,pause[count],1);
+  pausex[1]=Lo(pauselen); pausex[2]=Hi(pauselen);
+  for (count=0; count<sizeof(pausex); count++) PutData(&outfile,pausex[count],1);
 }
 
 void WriteTZXGroupStart(void)
@@ -2877,7 +2881,7 @@ void WriteTZXText(void)
 
 /***************************************************************************/
 
-void main(int argc, char **argv)
+int main(int argc, char **argv)
 {
   char *fnampoint;
 
@@ -2900,7 +2904,7 @@ void main(int argc, char **argv)
        fprintf(logfile,"Input file name: %s\nOutput file name: %s\n\n",inpfile.name,outfile.name);
 
      }
-  pilot.freq=808; sync.freq=2450; bit0.freq=2044; bit1.freq=1022;
+  pilot.freq=808; syncx.freq=2450; bit0.freq=2044; bit1.freq=1022;
   fnampoint=strrchr(inpfile.name,'\\');
   if (fnampoint==NULL) fnampoint=strupr(inpfile.name);
   else fnampoint=strupr(fnampoint)+1;
@@ -2910,15 +2914,15 @@ void main(int argc, char **argv)
   strcpy(descr,"Created with Ramsoft MAKETZX");
   WriteTZXText();
   if (samprate<11025) printf("***WARNING*** Sampling rate is too low. Raw mode may not work!\n\n");
-  printf("þ Using TZX format revision %s\n",tzxver);
-  printf("þ Printing file info in ");
+  printf("* Using TZX format revision %s\n",tzxver);
+  printf("* Printing file info in ");
   if (hex) printf("hex");
   else printf("decimal");
   printf(" format\n");
-  printf("þ Sampling rate: %.0f Hz\n",samprate);
+  printf("* Sampling rate: %.0f Hz\n",samprate);
   if (normal)
      {
-	printf("þ Operating in NORMAL mode\n\n");
+	printf("* Operating in NORMAL mode\n\n");
        do {
 	    word bytes;
 	    blocks++;
@@ -2936,7 +2940,7 @@ void main(int argc, char **argv)
      {
        dword grandtotal=0;
        word bytes;
-       printf("þ Operating in SOFTLOCK mode\n\n");
+       printf("* Operating in SOFTLOCK mode\n\n");
        if (!blockskip) blockskip=2;
        for (blocks=1; blocks<blockskip+1; blocks++)
 	   {
@@ -2982,7 +2986,7 @@ void main(int argc, char **argv)
        dword grandtotal=0;
        byte groupcount;
        word bytes;
-       printf("þ Operating in BLEEPLOAD mode\n\n");
+       printf("* Operating in BLEEPLOAD mode\n\n");
        if (!blockskip) blockskip=4;
        for (blocks=1; blocks<blockskip+1; blocks++)
 	   {
@@ -3029,7 +3033,7 @@ void main(int argc, char **argv)
   if (alk)
      {
        dword bytes;
-       printf("þ Operating in ALKATRAZ mode\n\n");
+       printf("* Operating in ALKATRAZ mode\n\n");
        if (!blockskip) blockskip=2;
        for (blocks=1; blocks<blockskip+1; blocks++)
 	   {
@@ -3051,7 +3055,7 @@ void main(int argc, char **argv)
      }
   if (slocktype)
      {
-       printf("þ Operating in SPEEDLOCK %u mode\n\n",slocktype);
+       printf("* Operating in SPEEDLOCK %u mode\n\n",slocktype);
        switch (slocktype)
 	      {
 		case 1 : {
@@ -3269,7 +3273,7 @@ void main(int argc, char **argv)
 			   PrintBlockInfo(0,bytes-1);
 			   WriteTZXTone(pilot.tstates,(pilotlength/pilot.samples)*2);
 			   blocks++;
-			   pulseseq[0]=sync.tstates; pulseseq[1]=sync.tstates;
+			   pulseseq[0]=syncx.tstates; pulseseq[1]=syncx.tstates;
 			   for (pnum=0; pnum<7; pnum++)
 			       {
 				 word plen=3500000/(2*compositesync[pnum]);
@@ -3291,7 +3295,7 @@ void main(int argc, char **argv)
 			   grandtotal+=(bytes=ReadSpeedlock47FirstBlock());
 			   PrintBlockInfo(nxtloadpos,bytes);
 			   WriteTZXTone(pilot.tstates,(pilotlength/pilot.samples)*2);
-			   pulseseq[0]=sync.tstates; pulseseq[1]=sync.tstates;
+			   pulseseq[0]=syncx.tstates; pulseseq[1]=syncx.tstates;
 			   for (pnum=0; pnum<7; pnum++)
 			       {
 				 word plen=3500000/(2*compositesync[pnum]);
@@ -3348,7 +3352,7 @@ void main(int argc, char **argv)
 				if ((mswave<100 && waves) || mswave>170) break;
 				else waves++;
 			      }
-			   while (blocks==blocks);
+			   while (1);
 			   if (waves<100)
 			      {
 				PopFilePointers();
@@ -3386,7 +3390,7 @@ void main(int argc, char **argv)
 			   PrintBlockInfo(slockloadaddress,bytes-1);
 			   WriteTZXTone(pilot.tstates,(pilotlength/pilot.samples)*2);
 			   blocks++;
-			   pulseseq[0]=sync.tstates; pulseseq[1]=sync.tstates;
+			   pulseseq[0]=syncx.tstates; pulseseq[1]=syncx.tstates;
 			   for (pnum=0; pnum<7; pnum++)
 			       {
 				 word plen=3500000/(2*compositesync[pnum]);
@@ -3409,7 +3413,7 @@ void main(int argc, char **argv)
 			   grandtotal+=(bytes=ReadSpeedlock47FirstBlock());
 			   PrintBlockInfo(nxtloadpos,bytes);
 			   WriteTZXTone(pilot.tstates,(pilotlength/pilot.samples)*2);
-			   pulseseq[0]=sync.tstates; pulseseq[1]=sync.tstates;
+			   pulseseq[0]=syncx.tstates; pulseseq[1]=syncx.tstates;
 			   for (pnum=0; pnum<7; pnum++)
 			       {
 				 word plen=3500000/(2*compositesync[pnum]);
@@ -3481,7 +3485,7 @@ void main(int argc, char **argv)
 			   PrintBlockInfo(slockloadaddress,bytes-1);
 			   WriteTZXTone(pilot.tstates,(pilotlength/pilot.samples)*2);
 			   blocks++;
-			   pulseseq[0]=sync.tstates; pulseseq[1]=sync.tstates;
+			   pulseseq[0]=syncx.tstates; pulseseq[1]=syncx.tstates;
 			   for (pnum=0; pnum<7; pnum++)
 			       {
 				 word plen=3500000/(2*compositesync[pnum]);
@@ -3505,7 +3509,7 @@ void main(int argc, char **argv)
 			   grandtotal+=(bytes=ReadSpeedlock47FirstBlock());
 			   PrintBlockInfo(nxtloadpos,bytes);
 			   WriteTZXTone(pilot.tstates,(pilotlength/pilot.samples)*2);
-			   pulseseq[0]=sync.tstates; pulseseq[1]=sync.tstates;
+			   pulseseq[0]=syncx.tstates; pulseseq[1]=syncx.tstates;
 			   for (pnum=0; pnum<7; pnum++)
 			       {
 				 word plen=3500000/(2*compositesync[pnum]);
@@ -3571,7 +3575,7 @@ void main(int argc, char **argv)
 			   PrintBlockInfo(slockloadaddress,bytes-1);
 			   WriteTZXTone(pilot.tstates,(pilotlength/pilot.samples)*2);
 			   blocks++;
-			   pulseseq[0]=sync.tstates; pulseseq[1]=sync.tstates;
+			   pulseseq[0]=syncx.tstates; pulseseq[1]=syncx.tstates;
 			   for (pnum=0; pnum<7; pnum++)
 			       {
 				 word plen=3500000/(2*compositesync[pnum]);
@@ -3596,7 +3600,7 @@ void main(int argc, char **argv)
 			   grandtotal+=(bytes=ReadSpeedlock47FirstBlock());
 			   PrintBlockInfo(nxtloadpos,bytes);
 			   WriteTZXTone(pilot.tstates,(pilotlength/pilot.samples)*2);
-			   pulseseq[0]=sync.tstates; pulseseq[1]=sync.tstates;
+			   pulseseq[0]=syncx.tstates; pulseseq[1]=syncx.tstates;
 			   for (pnum=0; pnum<7; pnum++)
 			       {
 				 word plen=3500000/(2*compositesync[pnum]);
@@ -3645,7 +3649,7 @@ void main(int argc, char **argv)
      {
        dword grandtotal=0;
        word bytes;
-       printf("þ Operating in ZETALOAD mode\n\n");
+       printf("* Operating in ZETALOAD mode\n\n");
        if (!blockskip) blockskip=2;
        for (blocks=1; blocks<blockskip+1; blocks++)
 	   {
@@ -3663,7 +3667,7 @@ void main(int argc, char **argv)
        PrintBlockInfo(slockloadaddress,bytes-1);
        WriteTZXTone(pilot.tstates,(pilotlength/pilot.samples)*2);
        blocks++;
-       pulseseq[0]=sync.tstates; pulseseq[1]=sync.tstates;
+       pulseseq[0]=syncx.tstates; pulseseq[1]=syncx.tstates;
        WriteTZXPulseSequence(2);
        saveslockflag=1;
        bit0.freq=2044; bit1.freq=1022; SetTimings();
@@ -3682,7 +3686,7 @@ void main(int argc, char **argv)
        bytes=ReadZetaLoadFirstBlock();
        if (!DataLoadOK) { strcpy(errstring,"Bad sync pulse detection or data error"); Error(8); }
        WriteTZXTone(pilot.tstates,(pilotlength/pilot.samples)*2);
-       pulseseq[0]=sync.tstates; pulseseq[1]=sync.tstates;
+       pulseseq[0]=syncx.tstates; pulseseq[1]=syncx.tstates;
        WriteTZXPulseSequence(2);
        saveslockflag=1;
        bit0.freq=2044; bit1.freq=1022; SetTimings();
@@ -3740,10 +3744,11 @@ void main(int argc, char **argv)
      }  */
   if (blocks>1 && !blocktype) End();
   if (blocks>1) printf("\n");
-  printf("þ Operating in RAW mode");
+  printf("* Operating in RAW mode");
   if (blocks>1) printf(" for last %lu samples",inpfile.length-totalread-(dword)(samprate*mspause/1000));
   printf("\n\n");
   do RawRead();
   while (blocktype);
   End();
+  return 0;
 }
