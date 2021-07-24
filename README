@@ -1,0 +1,37 @@
+RAMSOFT MakeTZX v1.02.1 SOURCE CODE
+-----------------------------------
+
+PLEASE READ DISCLAIM.TXT FOR THE DISCLAIMER !
+
+Due to the large number of requests, we have decided to release the
+sources of the latest version based on the old v1.xx engine.
+
+If you are going to use this code in any way,  we'd like to be informed
+about your projects and credited. We have spent many hours on MakeTZX, 
+it's like a pet for us... :)
+We are happy if someone wants to port MakeTZX to other platforms (eg any
+68K), but again please tell us, we like to know how MakeTZX is being
+spread.
+It would be nice if you send your works to us too.
+
+The code consists in a monolithic C module, so it's not exactly well
+designed and absolutely unreadable. It's not even portable, because the
+original project was intended for DOS only and developed for a 16 bit
+environment. You'll get in big troubles trying to do anything with it!
+We are sorry about that, but it is provided AS IS.
+
+For these reasons, we decided to drop everything and restart from scratch
+with a brand new engine, better structured and easily expandable. MakeTZX
+v2.xx is in C++ and every single algorithm has been rewritten and
+improved (pulse detection, advanced error correction, realtime decoding,
+multiformat support, decoding schemes and so on). Just for comparison,
+MakeTZX v2.11 consists in 42 source files for a total of 300 KB.
+At the moment, MakeTZX 2 is the only tool which offers TRUE and reliable
+REALTIME conversion (have you tried it?).
+
+For the moment, we are going to keep the v2 sources for us and eventually
+release them when the new v3.xx is out.
+
+To contact us for any reason, write to:  ramsoft@bbk.org
+
+The RAMSOFT team (December 10th 1998)

@@ -1,0 +1,217 @@
+MakeTZX version 1.02.1 for LINUX, (C) Ramsoft 1998
+Latest version at http://www.ramsoft.bbk.org  <ramsoft@bbk.org>
+
+Last revision : 05/04/1998 (maintenance release)
+
+Changes from version 1.02
+
+- The executable is now linked statically to the libraries.
+- The input file is correctly opened only for reading.
+
+Changes from version 1.01
+
+- Fixed TZX version bug, the major and minor numbers were swapped :(
+  (thanks to Erik Kunze)
+- Enhanced sync pulse detection
+
+Changes from version 1.00
+-------------------------
+
+- Added handling of VOC IDs 3,4 and 5 (thanks to Andy Schraepel)
+- Default TZX revision used is now 1.10
+- Enhanced decoding for extremely low sample rates
+
+
+Notes about the LINUX version (disclaimer)
+------------------------------------------
+
+MakeTZX has been developed under and for the MSDOS platform. The present
+executable is the result of the direct porting of the DOS sources to work
+with the GNU compiler, so it is NOT a Linux native version.
+This means that the program's behaviour is exactly the same as the
+DOS version's one -- not a bug less, not a bug more (if any).
+Future versions are planned to be more portable to the Unix environment
+and a major v2.x is currently under development.
+In conclusion, no warranty of any kind is provided and if you decide to
+use the program you do it at your own risk. The authors will not be
+responsable for damages and losses caused to your system directly
+or indirectly by the use of MakeTZX. 
+Of course this doesn't mean that MakeTZX can format your partition! :) 
+Please report bugs and problems to: ramsoft@bbk.org
+
+
+Introduction
+------------
+
+MakeTZX is a TZX converter for VOC files: it can convert loaders like 
+Speedlock (all 7 versions), Alkatraz, Bleepload, Softlock and ZetaLoad
+(Ramsoft's custom tape format). It uses TZX revision 1.10 by default and
+optionally 1.10 which can shorten file lengths very much (in particular for
+Speedlock loaders). Other interesting features are: extremely low system
+requirements (works on a plain 286 and doesn't require any memory manager 
+- of course this applies to MSDOS version only) and high conversion rates
+(nearly 98% !!!)
+
+
+Syntax and command line switches
+--------------------------------
+
+The syntax couldn't be simpler :
+
+MAKETZX <vocfile>[.VOC] [tzxfile[.TZX]] [-switches]
+
+You can specify a loading standard by using a particular switch; if NONE is
+specified then the program will operate in RAW mode. RAW mode can decode any
+turbo loading system including Alkatraz and Softlock (it will automatically
+try to detect the loading speed) but not Speedlock and Bleepload.
+
+Here's a list of all available switches:
+
+-n : tells the program to operate in NORMAL mode only, i.e. with the
+     timings of the ROM loader
+
+-a : this is used when converting programs protected by the Alkatraz
+     protection system (games like Ghouls'n'ghosts, Ghostbusters II, 10th
+     frame, Forgotten worlds and many others)
+
+-f : enables the Softlock decoding algorithm (games like Cylu and Chimera)
+
+-b : tells the program to use Bleepload algorithm (Bubble Bobble)
+
+-s n : uses Speedlock n algorithm. n could be any number between 1 and 7
+       (see below how to distinguish different versions)
+
+-z : this is used when converting programs encoded with ZetaLoad
+     loading system by Ramsoft
+
+-k n : tells the program to override the default number of blocks to
+       skip before considering encoded data blocks
+
+-x : displays file informations in hex form (except for block numbers and
+     pauses)
+
+-l : generates a log file to easy locate decoding errors
+
+-q : disables hi-fi decoding tones reproduction (for Speedlock loaders)
+
+-r : uses TZX 1.01 specifications
+
+NOTE that you can specify only ONE decoding algorithm (otherwise an error
+message is given).
+
+
+How to identify Speedlock versions
+----------------------------------
+
+There are seven different versions of Speedlock loaders.
+
+Type 1
+======
+
+- 1 or 2 normal speed blocks (both BASIC, first one very short)
+- clicking pilot
+- STANDARD colours
+- high speed loading (nearly 150% of normal)
+- no encryption
+- 48k only programs
+
+Examples : Highway encounter, JetSet Willy, Daley Thompson's Decathlon
+           Day 1 and 2.
+
+Type 2
+======
+
+- 2 normal speed blocks (both BASIC, first one very short)
+- clicking pilot
+- NON standard colours (RED/BLACK - BLUE/BLACK)
+- high speed loading (nearly 150% of normal)
+- ENCRYPTED data
+- 48 and 128k programs
+
+Examples : Enduro racer, Knight rider.
+
+Type 3
+======
+
+- 2 normal speed blocks (one BASIC, one CODE)
+- Bubbling sounds (NOT needed by decrypter) and flashing colours on border
+  while decrypting.
+- clicking pilot
+- NON standard colours (RED/BLACK - BLUE/BLACK)
+- high speed loading (nearly 150% of normal)
+- ENCRYPTED data
+- 48 and 128k programs
+
+Examples : Leviathan 48 and 128k
+
+Type 4
+======
+
+- 2 normal speed blocks (one short BASIC, one long CODE)
+- Bubbling sounds (NOT needed by decrypter - i.e. you could stop the tape)
+  and flashing colours on border
+  while decrypting.
+- NON clicking pilot
+- NON standard colours (RED/BLACK - BLUE/BLACK)
+- high speed loading (nearly 150% of normal)
+- ENCRYPTED data
+- 48 and 128k programs
+
+Examples : Athena 48 and 128k
+
+Type 5
+======
+
+- 2 normal speed blocks (one short BASIC, one long CODE)
+- Clicking tone or wave sequence (NEEDED by decrypter - i.e. if you stop the
+  tape the computer will reset) and flashing colours
+  on border while decrypting.
+- NON clicking pilot
+- NON standard colours (RED/BLACK - BLUE/BLACK)
+- high speed loading (nearly 150% of normal)
+- ENCRYPTED data
+- 48 and 128k programs
+
+Examples: Out run, Ping Pong, Winter games 1 and 2.
+
+Type 6
+======
+
+- 2 normal speed blocks (one short BASIC, one long CODE)
+- Clicking tone or wave sequence (NEEDED by decrypter - i.e. if you stop the
+  tape the computer will reset) and flashing colours
+  on border while decrypting.
+- NON clicking pilot
+- NON standard colours (RED/BLACK - BLUE/BLACK)
+- MEDIUM speed loading (nearly 127% of normal)
+- ENCRYPTED data
+- 48 and 128k programs
+
+Examples: Vixen.
+
+Type 7
+======
+
+- 1 normal speed block (long BASIC)
+- NO ACTION OR SOUNDS while decrypting.
+- NON clicking pilot
+- NON standard colours (RED/BLACK - BLUE/BLACK)
+- MEDIUM speed loading (nearly 127% of normal)
+- ENCRYPTED data
+- 48 and 128k programs
+
+Examples: Turrican, Myth, Operation Wolf 48 and 128k, Firefly, Arkanoid II,
+          Tusker, The last ninja II, and many others!!!
+
+NOTE: type 2 is very similar to type 1, type 4 is similar to type 3 and type
+      6 is similar to type 5. If you don't succeed in correct conversions 
+      please try even with more than one type.
+
+Known limits and bugs
+---------------------
+
+- MakeTZX can't handle VOCs that use repetition (IDs 6 and 7).
+- Optimal VOC sampling frequency is greater or equal than 20000 Hz. 
+  However the program may work even with lower sample rates and warns
+  you if the sample rate is under 11025 Hz.
+- RAW mode may not work with very low sample rates
